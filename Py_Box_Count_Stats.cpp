@@ -14,6 +14,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/eigen.h>
 #include <fftw3.h>
+#include <boost/math/distributions/chi_squared.hpp>
 
 using Eigen::ArrayXd;
 using Eigen::VectorXi;
@@ -284,24 +285,39 @@ std::vector<Matrix> processDataFile_and_Count(const char* filename, int Nframes,
     return CountMs;
 }
 
-void computeMeanAndSecondMoment(const Matrix& matrix, double& mean, double& variance, double& variance_sem) {
+void computeMeanAndSecondMoment(const Matrix& matrix, double& mean, double& variance, double& variance_sem_lb, double& variance_sem_ub) {
     int numRows = matrix.rows();
     int numCols = matrix.cols();
+    int n = numRows * numCols;
 
-    mean = matrix.mean();    
-    
-    
-    variance = 0.0;
-    for (int i = 0; i < numRows; ++i) {
-        for (int j = 0; j < numCols; ++j) {
-        double diff = matrix(i, j) - mean;
-        variance += diff * diff;
+    mean = 0.0;
+    double m2 = 0.0;
+
+    for (int i = 0; i < numRows; i++)
+    {
+        for (int j = 0; j < numCols; j++)
+        {
+            double value = matrix(i, j);
+            double delta = value - mean;
+            mean += delta / (i * numCols + j + 1.0);
+            m2 += delta * (value - mean);
         }
     }
-    variance /= (matrix.size() - 1.0);
+    variance = m2 / n;
     
-    variance_sem = 2.0*variance*std::sqrt(2.0 / (matrix.size() - 1.0) );
+    double alpha = 0.01;
+    double df = 1.0*matrix.size() - 1.0;
+    double chi_lb = boost::math::quantile(boost::math::chi_squared_distribution<double>(df), 0.5*alpha);
+    double chi_ub = boost::math::quantile(complement(boost::math::chi_squared_distribution<double>(df), 0.5*alpha));
     
+    //double test1 = boost::math::quantile(boost::math::chi_squared_distribution<double>(100.0), 0.5*alpha);
+    //double test2 = boost::math::quantile(complement(boost::math::chi_squared_distribution<double>(100.0), 0.5*alpha));
+    //std::cout << "chi test: " << test1 << "  " << test2 << "\n";
+    
+    variance_sem_lb = (df/chi_lb)*variance;
+    variance_sem_ub = (df/chi_ub)*variance;
+    
+//////////////////////////////////////////////////////////    
 //     ArrayXd row_var = ArrayXd::Zero(numRows);
 //     for (int i = 0; i < numRows; ++i) {
 //         double row_mean = matrix.row(i).mean();
@@ -314,20 +330,20 @@ void computeMeanAndSecondMoment(const Matrix& matrix, double& mean, double& vari
 //     variance = row_var.mean();
 //     double var_variance = ((row_var-variance).square().sum()) / (numRows - 1.0);
 //     variance_sem = 2.0*std::sqrt(var_variance / (1.0*numRows));
-    
+////////////////////////////////////////////////////////////    
     
 }
 
 void Calc_and_Output_Stats(const char* infile, std::string outfile, int Nframes, double Lx, double Ly, std::vector<double>& Lbs, std::vector<double>& sep) {
     std::vector<Matrix> CountMs = processDataFile_and_Count(infile, Nframes, Lx, Ly, Lbs, sep);
 
-    Matrix N_Stats(Lbs.size(),4);
+    Matrix N_Stats(Lbs.size(),5);
 
     for (int lbIdx = 0; lbIdx < Lbs.size(); ++lbIdx) {
         std::cout << "Processing Box size: " << Lbs[lbIdx] << "\n";
 
         N_Stats(lbIdx,0) = Lbs[lbIdx];
-        computeMeanAndSecondMoment(CountMs[lbIdx], N_Stats(lbIdx,1), N_Stats(lbIdx,2), N_Stats(lbIdx,3));
+        computeMeanAndSecondMoment(CountMs[lbIdx], N_Stats(lbIdx,1), N_Stats(lbIdx,2), N_Stats(lbIdx,3), N_Stats(lbIdx,4));
 
         Vector MSDrow;
         Matrix MSDs = Matrix::Zero(CountMs[lbIdx].rows(),CountMs[lbIdx].cols());
