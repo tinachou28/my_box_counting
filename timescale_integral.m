@@ -1,4 +1,6 @@
 clf
+clear all
+
 addpath('cmap')
 
 set(0,'defaulttextInterpreter','latex')
@@ -27,7 +29,7 @@ Ls = round(plateau_data(:,1),4);
 cols = (dense(length(Ls)));
 
 
-for kk = 1:length(Ls)
+for kk = 2:length(Ls)
     L_0 = Ls(kk);
     plateau = 2*plateau_data(kk,3); %(plateau_data(kk,2) - plateau_data(kk,1)^2);
     %disp(num2str(plateau))
@@ -67,7 +69,7 @@ for kk = 1:length(Ls)
     end
     idxs  = idxf-round(0.75*idxf);
     
-    disp(num2str(yt(idxf)))
+    %disp(num2str(yt(idxf)))
     if((yt(idxf) > 1e-3) && yt(1) > 1e-1)
         
         Const = polyfit(log(xt(idxs:idxf)),log(yt(idxs:idxf)), 2);
@@ -93,8 +95,13 @@ for kk = 1:length(Ls)
         hold all
         plot(xt(idxs:idxf),yt(idxs:idxf),':','color','b','linewidth',4)
     else
-        Xfit = xt;
-        Yfit = yt';
+        idxf = find(yt < 5e-6,1);
+        Xfit = xt(1:idxf);
+        Yfit = yt(1:idxf)';
+        xt(idxf+1:end) = [];
+        yt(idxf+1:end) = [];
+        plot(Xfit,Yfit,'-r')
+        hold all
     end
     
    
@@ -103,12 +110,12 @@ for kk = 1:length(Ls)
     x0 = [0,0,0,0,0,0,0,0];
     fitfun = fittype('1 + a*x.^(1/2)+ b*x + c*x.^(3/2) + d*x.^(2) + f*x.^(5/2) + g*x.^(3) + h*x.^(7/2) + p*x.^(4)','dependent',{'y'},'independent',{'x'},...
     'coefficients',{'a','b','c','d','f','g','h','p'});
-    fxt = [0 xt(1:10)];
+    fxt = [1e-8 xt(1:10)];
     fyt = [1 yt(1:10)'];
     
     [fitted_curve,gof] = fit(fxt',fyt',fitfun,'StartPoint',x0);
     coeffvals = coeffvalues(fitted_curve);
-    xsmall = [0:1e-2:0.5];
+    xsmall = logspace(-8,log10(0.5),1000); %[1e-8:1e-3:0.5];
     ysmall = fitted_curve(xsmall);
     hold all
     plot(xsmall,ysmall,'g')
@@ -120,6 +127,7 @@ for kk = 1:length(Ls)
     rel_err = abs((Tscale_fit-Tscale_data)/(0.5*(Tscale_fit+Tscale_data)));
     disp(num2str([Tscale_fit Tscale_data rel_err]))
     
+    Small_int(kk) = trapz(xsmall,ysmall);
     Tscale(kk) = Tscale_fit;
     Tscale_d(kk) = Tscale_data;
     set(gca, 'YScale', 'log', 'XScale', 'log')
