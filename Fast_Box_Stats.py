@@ -21,7 +21,7 @@ if __name__ == '__main__':
     #Nframes = 26478 # number of data frames
     a = 1.395 #radius of particles
     sep = np.array([2*a, 2*a, 2*a, 2*a, 2*a, 2*a, 2*a, 4*a, 4*a, 4*a]) #3*a #separation between boxes
-
+    Calc_and_Output_Stats(infile, outfile, Nframes, Lx, Ly, Box_Ls, sep)
     ###########################################################
     # For the cpp module
     #PyCount.Calc_and_Output_Stats(infile, outfile, Nframes, Lx, Ly, Box_Ls, sep)
