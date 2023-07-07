@@ -248,19 +248,3 @@ def Calc_and_Output_Stats(infile, outfile, Nframes, Lx, Ly, Lbs, sep):
         outputMatrixToFile(MSDsem, outfile + "_MSDerror_BoxL_" + Lstr + ".txt")
 
     outputMatrixToFile(N_Stats, outfile + "_N_stats.txt")
-    
-    
-if __name__ == '__main__':
-    #################################################
-    # set parameters for data
-    Lx = 288.0 # box size x-dir 
-    Ly = 288.0 # box size y-dir
-    Box_Ls = np.array([256.0, 128.0, 64.0, 32.0, 16.0, 8.0, 4.0, 2.0, 1.0]) # array of box sizes to probe
-    #modfile = "./data/spec_softetakt_long_run_dtau_0.025_nsave_4.suspension_phi_0.66_L_288.config"
-    #ConvertDataFile(modfile)
-    infile = "./data/spec_softetakt_long_run_dtau_0.025_nsave_4.suspension_phi_0.66_L_288_modified.txt"
-    outfile = "./Count_Data_Cpp/Pure_Py_Test_long_phi_0.66"
-    Nframes = 7424 # number of data frames
-    a = 1.395 #radius of particles
-    sep = np.array([2*a, 2*a, 2*a, 2*a, 2*a, 2*a, 2*a, 1*a, 1*a]) #3*a #separation between boxes
-    Calc_and_Output_Stats(infile, outfile, Nframes, Lx, Ly, Box_Ls, sep)
