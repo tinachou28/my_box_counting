@@ -3,6 +3,7 @@ import scipy.stats as stats
 from numba import jit, njit, prange, objmode
 from numba.typed import List as nblist
 import numba as nb
+import sys
 
 ###############################
 # These two function are from SE
@@ -43,28 +44,24 @@ def msd_matrix(matrix):
         MSDs[i,:] = MSD
     return MSDs
 
+@njit(parallel=True, fastmath=True)
+def msd_coords(Xs,Ys):
+    numRows, numCols = Xs.shape
+    MSDs = np.zeros((numRows, numCols))
+
+    for i in prange(numRows):
+        xi = Xs[i, :]
+        yi = Ys[i, :]
+        row_i = msd_fft1d(xi) + msd_fft1d(yi)
+        MSDs[i,:] = row_i
+    
+    return MSDs
+
 
 def outputMatrixToFile(matrix, filename):
     np.savetxt(filename, matrix, delimiter=' ', fmt='%.10f')
     print("Matrix data has been written to", filename)
 
-@njit()
-def computeColumnStats(matrix):
-    numRows, numCols = matrix.shape
-    sumSqDiff = np.zeros(numCols)
-    mean = np.zeros(numCols)
-    SEM = np.zeros(numCols)
-
-    for i in range(numRows):
-        row_i = matrix[i, :]
-        delta = row_i - mean
-        mean += (1.0 / (i+1.0)) * delta
-        delta2 = row_i - mean
-        sumSqDiff += np.multiply(delta, delta2)
-    
-    SEM = (2.0 / np.sqrt(numRows * (numRows - 1.0))) * np.sqrt(sumSqDiff)
-    
-    return mean, SEM
 
 def ConvertDataFile(filename):
     fileinput = open(filename, "r")
@@ -109,6 +106,7 @@ def ConvertDataFile(filename):
 
     fileinput.close()
     fileoutput.close()
+    return Ntimes
 
 # def processDataFile(filename, Nframes):
 #     Xs = [[] for _ in range(Nframes)]
@@ -155,22 +153,25 @@ def processDataFile(filename, Nframes):
 
     try:
         with open(filename, "r") as fileinput:
+            file_contents = fileinput.readlines()
             ind_p = 0
-            for line in fileinput:
+            for line in file_contents:
                 values = line.split()
                 try:
                     x = float(values[0])
                     y = float(values[1])
-                    ind = int(values[2])
+                    ind = round(float(values[2]))
                     Xs[ind-1].append(x)
                     Ys[ind-1].append(y)
                     if ind_p != ind:
                         print(ind)
                     ind_p = ind
                 except (ValueError, IndexError):
+                    print("I can't read index "+str(ind_p)+" of the file")
                     continue
     except IOError:
         print("Error opening file:", filename)
+        sys.exit()
     
     return Xs, Ys
 
@@ -217,32 +218,6 @@ def processDataFile_and_Count(x, y, Lx, Ly, Lbox, sep):
 
     print("Done with counting")
     return CountMs
-
-def computeMeanAndSecondMoment(matrix):
-    numRows, numCols = matrix.shape
-    n = numRows * numCols
-
-    mean = 0.0
-    m2 = 0.0
-
-    for i in range(numRows):
-        for j in range(numCols):
-            value = matrix[i, j]
-            delta = value - mean
-            mean += delta / (i * numCols + j + 1.0)
-            m2 += delta * (value - mean)
-
-    variance = m2 / n
-
-    alpha = 0.01
-    df = 1.0 * matrix.size - 1.0
-    chi_lb = stats.chi2.ppf(0.5 * alpha, df)
-    chi_ub = stats.chi2.ppf(1.0 - 0.5 * alpha, df)
-
-    variance_sem_lb = (df / chi_lb) * variance
-    variance_sem_ub = (df / chi_ub) * variance
-
-    return mean, variance, variance_sem_lb, variance_sem_ub
 
 
 @njit(fastmath=True)
@@ -306,3 +281,18 @@ def Calc_and_Output_Stats(infile, outfile, Nframes, Lx, Ly, Lbs, sep):
         outputMatrixToFile(MSDsem, outfile + "_MSDerror_BoxL_" + Lstr + ".txt")
 
     outputMatrixToFile(N_Stats, outfile + "_N_stats.txt")
+
+ 
+
+def Calc_MSD_and_Output(infile, outfile, Nframes):
+    #CountMs = processDataFile_and_Count(infile, Nframes, Lx, Ly, Lbs, sep)
+    Xs,Ys = processDataFile(infile, Nframes)
+    print("Done with data read")
+    Xs = np.array(Xs).T
+    Ys = np.array(Ys).T
+    print("calculating particle MSDs")
+    MSDs = msd_coords(Xs,Ys)
+    MSDmean = np.mean(MSDs, axis=0)
+    MSDsem = np.std(MSDs, axis=0) / np.sqrt(MSDs.shape[0])
+    outputMatrixToFile(MSDmean, outfile + "_particles_MSDmean.txt")
+    outputMatrixToFile(MSDsem, outfile + "_particles_MSDerror.txt")
