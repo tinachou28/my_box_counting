@@ -125,43 +125,71 @@ def ConvertDataFile(filename):
     fileinput.close()
     fileoutput.close()
 
+# def processDataFile(filename, Nframes):
+#     Xs = [[] for _ in range(Nframes)]
+#     Ys = [[] for _ in range(Nframes)]
+
+#     fileinput = open(filename, "r")
+#     if not fileinput:
+#         print("Error opening file:", filename)
+#         return Xs, Ys
+
+#     ind, ind_p = 0, 0
+#     x, y = 0.0, 0.0
+
+#     frame = 0
+#     start = 0
+#     while True:
+#         line = fileinput.readline().strip()
+#         if not line:
+#             break
+
+#         values = line.split()
+#         x = float(values[0])
+#         y = float(values[1])
+#         ind = int(values[2])
+
+#         if frame == 0 and ind != 0:
+#             start = ind
+#             frame = 1
+#             ind_p = ind - 1
+#         if ind_p != ind:
+#             print(ind)
+        
+#         Xs[ind - start].append(x)
+#         Ys[ind - start].append(y)
+#         ind_p = ind
+
+#     fileinput.close()
+#     return Xs, Ys
+
+
 def processDataFile(filename, Nframes):
     Xs = [[] for _ in range(Nframes)]
     Ys = [[] for _ in range(Nframes)]
 
-    fileinput = open(filename, "r")
-    if not fileinput:
+    try:
+        with open(filename, "r") as fileinput:
+            file_contents = fileinput.readlines()
+            ind_p = 0
+            for line in file_contents:
+                values = line.split()
+                try:
+                    x = float(values[0])
+                    y = float(values[1])
+                    ind = round(float(values[2]))
+                    Xs[ind-1].append(x)
+                    Ys[ind-1].append(y)
+                    if ind_p != ind:
+                        print(ind)
+                    ind_p = ind
+                except (ValueError, IndexError):
+                    print("I can't read index "+str(ind_p)+" of the file")
+                    continue
+    except IOError:
         print("Error opening file:", filename)
-        return Xs, Ys
-
-    ind, ind_p = 0, 0
-    x, y = 0.0, 0.0
-
-    frame = 0
-    start = 0
-    while True:
-        line = fileinput.readline().strip()
-        if not line:
-            break
-
-        values = line.split()
-        x = float(values[0])
-        y = float(values[1])
-        ind = int(values[2])
-
-        if frame == 0 and ind != 0:
-            start = ind
-            frame = 1
-            ind_p = ind - 1
-        if ind_p != ind:
-            print(ind)
-        
-        Xs[ind - start].append(x)
-        Ys[ind - start].append(y)
-        ind_p = ind
-
-    fileinput.close()
-
+        sys.exit()
+    
     return Xs, Ys
 
 def processDataFile_and_Count(filename, Nframes, Lx, Ly, Lbox, sep):
