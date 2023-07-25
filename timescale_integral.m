@@ -17,7 +17,7 @@ lsty = '-.';
 
 plateau_data = dlmread(['./Count_Data_Cpp/' nhstr '_N_stats.txt']);
 Ls = round(plateau_data(:,1),4);
-cols = (dense(length(Ls)));
+cols = (parula(length(Ls)));
 
 
 for kk = 1:length(Ls)
