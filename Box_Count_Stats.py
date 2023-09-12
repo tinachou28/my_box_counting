@@ -110,7 +110,7 @@ def ConvertDataFile(filename):
 
         parts = int(line)
         Ntimes += 1
-        print(Ntimes)
+        #youprint(Ntimes)
 
         x = np.zeros(parts)
         y = np.zeros(parts)
@@ -180,8 +180,8 @@ def processDataFile(filename, Nframes):
                     ind = round(float(values[2]))
                     Xs[ind-1].append(x)
                     Ys[ind-1].append(y)
-                    if ind_p != ind:
-                        print(ind)
+                    #if ind_p != ind:
+                        #print(ind)
                     ind_p = ind
                 except (ValueError, IndexError):
                     print("I can't read index "+str(ind_p)+" of the file")
@@ -264,7 +264,7 @@ def Calc_and_Output_Stats(infile, outfile, Nframes, Lx, Ly, Lbs, sep):
 
         MSDs = np.zeros(CountMs[lbIdx].shape)
         for i in range(CountMs[lbIdx].shape[0]):
-            print(100.0 * ((1.0 * i) / (1.0 * MSDs.shape[0])), "percent done with MSD calc")
+            #print(100.0 * ((1.0 * i) / (1.0 * MSDs.shape[0])), "percent done with MSD calc")
             MSDrow = CountMs[lbIdx][i, :]
             MSDs[i, :] = msd_fft(MSDrow)  # Assuming msd_fft is defined elsewhere
             # print("MSD:", MSDs[i, :])

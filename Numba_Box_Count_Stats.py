@@ -92,7 +92,7 @@ def ConvertDataFile(filename):
 
         parts = int(line)
         Ntimes += 1
-        print(Ntimes)
+        #print(Ntimes)
 
         x = np.zeros(parts)
         y = np.zeros(parts)
@@ -163,8 +163,8 @@ def processDataFile(filename, Nframes):
                     ind = round(float(values[2]))
                     Xs[ind-1].append(x)
                     Ys[ind-1].append(y)
-                    if ind_p != ind:
-                        print(ind)
+                    #if ind_p != ind:
+                        #print(ind)
                     ind_p = ind
                 except (ValueError, IndexError):
                     print("I can't read index "+str(ind_p)+" of the file")
