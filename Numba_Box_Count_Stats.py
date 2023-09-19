@@ -156,18 +156,18 @@ def processDataFile(filename, Nframes):
             file_contents = fileinput.readlines()
             ind_p = 0
             for line in file_contents:
-                values = line.split()
+                values = line.split('\t')
                 try:
                     x = float(values[0])
                     y = float(values[1])
                     ind = round(float(values[2]))
-                    Xs[ind-1].append(x)
-                    Ys[ind-1].append(y)
+                    Xs[ind].append(x)
+                    Ys[ind].append(y)
                     #if ind_p != ind:
                         #print(ind)
                     ind_p = ind
                 except (ValueError, IndexError):
-                    print("I can't read index "+str(ind_p)+" of the file")
+                    #print("I can't read index "+str(ind_p)+" of the file")
                     continue
     except IOError:
         print("Error opening file:", filename)
@@ -296,3 +296,223 @@ def Calc_MSD_and_Output(infile, outfile, Nframes):
     MSDsem = np.std(MSDs, axis=0) / np.sqrt(MSDs.shape[0])
     outputMatrixToFile(MSDmean, outfile + "_particles_MSDmean.txt")
     outputMatrixToFile(MSDsem, outfile + "_particles_MSDerror.txt")
+    
+import scipy
+from scipy.signal import welch
+import matplotlib.pyplot as plt
+
+def BoxCountRaw(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
+
+    Xs,Ys = processDataFile(infile, Nframes)
+    print("Done with data read")
+    print("Compiling fast counting function (this may take a min. or so)")
+    Xnb = nblist(np.array(xi) for xi in Xs)
+    Ynb = nblist(np.array(yi) for yi in Ys)
+    CountMs = processDataFile_and_Count(Xnb, Ynb, Lx, Ly, Lbs, sep)
+    #(N boxes, N frames)
+
+    for i in range(len(CountMs)):
+        box = CountMs[i]
+        print(f"Displaying data for {Lbs[i]} px")
+        L = Lbs[i]*p2m
+            
+        f, pxx = welch(box, fs=fps, nperseg = 2**10) #2**12=4096
+
+        x = np.mean(pxx, axis=0)
+        
+        logf = np.log10(f[1:])
+        logx = np.log10(x[1:])
+
+        left = 3
+        right = 50
+
+        def _plot(left, right):
+
+            logf_trunc = logf[left:right]
+            logx_trunc = logx[left:right]
+            
+            slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(logf_trunc, logx_trunc, 'greater')
+            eq2 = 'y = ' + '{:.4}'.format(slope) + 'x + ' + '{:.4}'.format(intercept)
+            r_sq = '{:.4}'.format(r_value)
+            s2_err = '{:.4}'.format(std_err)
+            txt = f'{eq2}; r = {r_sq}'
+            
+            plt.plot(logf[left:right], slope*logf_trunc+intercept, label=txt, linewidth = 2, zorder=1, color='c')
+            plt.plot(logf, logx, ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+            plt.title(f"Boxsize = {L} µm")
+            plt.xlabel('log frequency (Hz)')
+            plt.ylabel('log PSD')
+            vline = np.log10(4*D/(L**2))
+            plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+            plt.legend()
+            plt.show()
+
+        _plot(left, right)
+    
+        while input("Redo? Type 'Y' to redo or any other key to move on ") in ["Y", 'y']:
+            try:
+                left = int(input("left"))
+                right = int(input("right"))
+                _plot(left, right)
+            except:
+                plt.plot(logf, logx, ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+                plt.title(f"Boxsize = {L} µm")
+                plt.xlabel('log frequency (Hz)')
+                plt.ylabel('log PSD')
+                vline = np.log10(4*D/(L**2))
+                plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+                plt.legend()
+                plt.show()
+                break
+
+        if linlog:
+            def _plot2(left, right):
+                logf_trunc = logf[left:right]
+                x_trunc = x[left+1:right+1]
+                
+                slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(logf_trunc, x_trunc, 'greater')
+                eq2 = 'y = ' + '{:.4}'.format(slope) + 'x + ' + '{:.4}'.format(intercept)
+                r_sq = '{:.4}'.format(r_value)
+                s2_err = '{:.4}'.format(std_err)
+                txt = f'{eq2}; r = {r_sq}'
+                
+                plt.plot(logf, x[1:], ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+                plt.plot(logf_trunc, slope*logf_trunc+intercept, label=txt, linewidth = 2, zorder=1, color='c')
+                plt.title(f"Boxsize = {L} µm")
+                plt.xlabel('log frequency')
+                plt.ylabel('PSD')
+                vline = np.log10(4*D/(L**2))
+                plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+                plt.legend()
+                plt.show()
+
+            left = 1
+            right = 10
+
+            _plot2(left, right)
+
+            while input("Redo? Type 'Y' to redo or any other key to move on ") in ["Y", 'y']:
+                try:
+                    left = int(input("left"))
+                    right = int(input("right"))
+                    _plot2(left, right)
+                except:
+                    plt.plot(logf, x[1:], ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+                    plt.title(f"Boxsize = {L} µm")
+                    plt.xlabel('log frequency')
+                    plt.ylabel('PSD')
+                    vline = np.log10(4*D/(L**2))
+                    plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+                    plt.legend()
+                    plt.show()
+                    break
+
+def BoxCountDerivatived(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
+
+    Xs,Ys = processDataFile(infile, Nframes)
+    print("Done with data read")
+    print("Compiling fast counting function (this may take a min. or so)")
+    Xnb = nblist(np.array(xi) for xi in Xs)
+    Ynb = nblist(np.array(yi) for yi in Ys)
+    CountMs = processDataFile_and_Count(Xnb, Ynb, Lx, Ly, Lbs, sep)
+    #(N boxes, N frames)
+
+    for i in range(len(CountMs)):
+        box = CountMs[i]
+        print(f"Displaying data for {Lbs[i]} px")
+        L = Lbs[i]*p2m
+        dNdt = [(box[i+1]-box[i])*fps for i in range(len(box)-1)]
+            
+        f, pxx = welch(dNdt, fs=fps, nperseg = 2**10) #2**12=4096
+
+        px = np.mean(pxx, axis=0)
+        x = [px[i]/((2*np.pi*f[i])**2) for i in range(len(f))]
+        
+        logf = np.log10(f[1:])
+        logx = np.log10(x[1:])
+
+        left = 3
+        right = 50
+
+        def _plot(left, right):
+
+            logf_trunc = logf[left:right]
+            logx_trunc = logx[left:right]
+            
+            slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(logf_trunc, logx_trunc, 'greater')
+            eq2 = 'y = ' + '{:.4}'.format(slope) + 'x + ' + '{:.4}'.format(intercept)
+            r_sq = '{:.4}'.format(r_value)
+            s2_err = '{:.4}'.format(std_err)
+            txt = f'{eq2}; r = {r_sq}'
+            
+            plt.plot(logf[left:right], slope*logf_trunc+intercept, label=txt, linewidth = 2, zorder=1, color='c')
+            plt.plot(logf, logx, ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+            plt.title(f"Boxsize = {L} µm")
+            plt.xlabel('frequency (Hz)')
+            plt.ylabel('PSD')
+            vline = np.log10(4*D/(L**2))
+            plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+            plt.legend()
+            plt.show()
+
+        _plot(left, right)
+    
+        while input("Redo? Type 'Y' to redo or any other key to move on ") in ["Y", 'y']:
+            try:
+                left = int(input("left"))
+                right = int(input("right"))
+                _plot(left, right)
+            except:
+                plt.plot(logf, logx, ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+                plt.title(f"Boxsize = {L} µm")
+                plt.xlabel('frequency (Hz)')
+                plt.ylabel('PSD')
+                vline = np.log10(4*D/(L**2))
+                plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+                plt.legend()
+                plt.show()
+                break
+
+        if linlog:
+            def _plot2(left, right):
+                logf_trunc = logf[left:right]
+                x_trunc = x[left+1:right+1]
+                
+                slope, intercept, r_value, p_value, std_err = scipy.stats.linregress(logf_trunc, x_trunc, 'greater')
+                eq2 = 'y = ' + '{:.4}'.format(slope) + 'x + ' + '{:.4}'.format(intercept)
+                r_sq = '{:.4}'.format(r_value)
+                s2_err = '{:.4}'.format(std_err)
+                txt = f'{eq2}; r = {r_sq}'
+                
+                plt.plot(logf, x[1:], ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+                plt.plot(logf_trunc, slope*logf_trunc+intercept, label=txt, linewidth = 2, zorder=1, color='c')
+                plt.title(f"Boxsize = {L} µm")
+                plt.xlabel('log frequency')
+                plt.ylabel('PSD')
+                vline = np.log10(4*D/(L**2))
+                plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+                plt.legend()
+                plt.show()
+
+            left = 1
+            right = 10
+
+            _plot2(left, right)
+
+            while input("Redo? Type 'Y' to redo or any other key to move on ") in ["Y", 'y']:
+                try:
+                    left = int(input("left"))
+                    right = int(input("right"))
+                    _plot2(left, right)
+                except:
+                    plt.plot(logf, x[1:], ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+                    plt.title(f"Boxsize = {L} µm")
+                    plt.xlabel('log frequency')
+                    plt.ylabel('PSD')
+                    vline = np.log10(4*D/(L**2))
+                    plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+                    plt.legend()
+                    plt.show()
+                    break
+
+
