@@ -180,7 +180,6 @@ def processDataFile(filename, Nframes):
 def processDataFile_and_Count(x, y, Lx, Ly, Lbox, sep):
     CountMs = nblist()
     for lbIdx in range(len(Lbox)):
-        print("Counting boxes L =", Lbox[lbIdx])
         Times = len(x)
         SepSize = Lbox[lbIdx] + sep[lbIdx]
         Nx = int(np.floor(Lx / SepSize))
@@ -251,7 +250,6 @@ def Calc_and_Output_Stats(infile, outfile, Nframes, Lx, Ly, Lbs, sep):
     N_Stats = np.zeros((len(Lbs), 5))
 
     for lbIdx in range(len(Lbs)):
-        print("Processing Box size:", Lbs[lbIdx])
 
         N_Stats[lbIdx, 0] = Lbs[lbIdx]
         #mean, variance, variance_sem_lb, variance_sem_ub = computeMeanAndSecondMoment(CountMs[lbIdx])
@@ -310,6 +308,8 @@ def BoxCountRaw(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
     Ynb = nblist(np.array(yi) for yi in Ys)
     CountMs = processDataFile_and_Count(Xnb, Ynb, Lx, Ly, Lbs, sep)
     #(N boxes, N frames)
+    slopes = []
+    stderrs = []
 
     for i in range(len(CountMs)):
         box = CountMs[i]
@@ -346,14 +346,15 @@ def BoxCountRaw(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
             plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
             plt.legend()
             plt.show()
+            return slope, std_err
 
-        _plot(left, right)
+        slope, stderr = _plot(left, right)
     
         while input("Redo? Type 'Y' to redo or any other key to move on ") in ["Y", 'y']:
             try:
                 left = int(input("left"))
                 right = int(input("right"))
-                _plot(left, right)
+                slope, stderr = _plot(left, right)
             except:
                 plt.plot(logf, logx, ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
                 plt.title(f"Boxsize = {L} µm")
@@ -364,6 +365,8 @@ def BoxCountRaw(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
                 plt.legend()
                 plt.show()
                 break
+        slopes.append(slope)
+        stderrs.append(stderr)
 
         if linlog:
             def _plot2(left, right):
@@ -406,8 +409,17 @@ def BoxCountRaw(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
                     plt.legend()
                     plt.show()
                     break
+    print("\nLs:")
+    for i in Lbs:
+        print(i*p2m)
+    print("\nSlopes:")
+    for i in slopes:
+        print(i)
+    print("\nStderrs:")
+    for i in stderrs:
+        print(i)
 
-def BoxCountDerivatived(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
+def BoxCountDerivatived(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog, lefts, rights):
 
     Xs,Ys = processDataFile(infile, Nframes)
     print("Done with data read")
@@ -417,22 +429,26 @@ def BoxCountDerivatived(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
     CountMs = processDataFile_and_Count(Xnb, Ynb, Lx, Ly, Lbs, sep)
     #(N boxes, N frames)
 
+    slopes = []
+    stderrs = []
+
     for i in range(len(CountMs)):
-        box = CountMs[i]
+        box = np.transpose(CountMs[i])
         print(f"Displaying data for {Lbs[i]} px")
         L = Lbs[i]*p2m
-        dNdt = [(box[i+1]-box[i])*fps for i in range(len(box)-1)]
+        dNdt = [((box[i+1]-box[i])*fps) for i in range(len(box)-1)]
+        dN_dt = np.transpose(dNdt)
             
-        f, pxx = welch(dNdt, fs=fps, nperseg = 2**10) #2**12=4096
+        f, pxx = welch(dN_dt, fs=fps, nperseg = 2**10) #2**12=4096
 
         px = np.mean(pxx, axis=0)
-        x = [px[i]/((2*np.pi*f[i])**2) for i in range(len(f))]
+        x = [(px[i]/((2*np.pi*f[i])**2)) for i in range(len(f))]
         
         logf = np.log10(f[1:])
         logx = np.log10(x[1:])
 
-        left = 3
-        right = 50
+        left = lefts[i]
+        right = rights[i]
 
         def _plot(left, right):
 
@@ -446,32 +462,46 @@ def BoxCountDerivatived(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
             txt = f'{eq2}; r = {r_sq}'
             
             plt.plot(logf[left:right], slope*logf_trunc+intercept, label=txt, linewidth = 2, zorder=1, color='c')
-            plt.plot(logf, logx, ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+            plt.plot(logf[1:-1], logx[1:-1], ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
             plt.title(f"Boxsize = {L} µm")
-            plt.xlabel('frequency (Hz)')
-            plt.ylabel('PSD')
+            plt.xlabel('log frequency (Hz)')
+            plt.ylabel('log PSD(dN/dt)/(2*pi*f)^2')
             vline = np.log10(4*D/(L**2))
             plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
             plt.legend()
             plt.show()
 
-        _plot(left, right)
-    
-        while input("Redo? Type 'Y' to redo or any other key to move on ") in ["Y", 'y']:
-            try:
-                left = int(input("left"))
-                right = int(input("right"))
-                _plot(left, right)
-            except:
-                plt.plot(logf, logx, ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
-                plt.title(f"Boxsize = {L} µm")
-                plt.xlabel('frequency (Hz)')
-                plt.ylabel('PSD')
-                vline = np.log10(4*D/(L**2))
-                plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
-                plt.legend()
-                plt.show()
-                break
+            return slope, std_err
+
+        try:
+            slope, stderr = _plot(left, right)
+            while input("Redo? Type 'Y' to redo or any other key to move on ") in ["Y", 'y']:
+                try:
+                    left = int(input("left"))
+                    right = int(input("right"))
+                    slope, stderr = _plot(left, right)
+                except:
+                    plt.plot(logf[1:-1], logx[1:-1], ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+                    plt.title(f"Boxsize = {L} µm")
+                    plt.xlabel('log frequency (Hz)')
+                    plt.ylabel('log PSD')
+                    vline = np.log10(4*D/(L**2))
+                    plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+                    plt.legend()
+                    plt.show()
+                    break
+            slopes.append(slope)
+            stderrs.append(stderr)
+        
+        except:
+            plt.plot(logf[1:-1], logx[1:-1], ls="None", marker = '.', markersize=2, zorder = 2, color='b', label="Data")
+            plt.title(f"Boxsize = {L} µm")
+            plt.xlabel('log frequency (Hz)')
+            plt.ylabel('log PSD')
+            vline = np.log10(4*D/(L**2))
+            plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+            plt.legend()
+            plt.show()
 
         if linlog:
             def _plot2(left, right):
@@ -514,5 +544,60 @@ def BoxCountDerivatived(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m, linlog):
                     plt.legend()
                     plt.show()
                     break
+                
+    print("\nLs:")
+    for i in Lbs:
+        print(i*p2m)
+    print("\nSlopes:")
+    for i in slopes:
+        print(i)
+    print("\nStderrs:")
+    for i in stderrs:
+        print(i)
+
+def BoxCountCombined(infile, Nframes, Lx, Ly, Lbs, sep, fps, D, p2m):
+    Xs,Ys = processDataFile(infile, Nframes)
+    print("Done with data read")
+    print("Compiling fast counting function (this may take a min. or so)")
+    Xnb = nblist(np.array(xi) for xi in Xs)
+    Ynb = nblist(np.array(yi) for yi in Ys)
+    CountMs = processDataFile_and_Count(Xnb, Ynb, Lx, Ly, Lbs, sep)
+    #(N boxes, N frames)
+
+    for i in range(len(CountMs)):
+        box = np.transpose(CountMs[i])
+        print(f"Displaying data for {Lbs[i]} px")
+        L = Lbs[i]*p2m
+        dNdt = [((box[i+1]-box[i])*fps) for i in range(len(box)-1)]
+        dN_dt = np.transpose(dNdt)
+            
+        f, pxx = welch(dN_dt, fs=fps, nperseg = 2**10) #2**12=4096
+
+        px = np.mean(pxx, axis=0)
+        dx = [(px[i]/((2*np.pi*f[i])**2)) for i in range(len(f))]
+        
+        logf = np.log10(f[1:])
+        logdx = np.log10(dx[1:])
+
+        plt.plot(logf, logdx, ls="None", marker = '.', markersize=2, zorder = 2, label="dPSD")
+        vline = np.log10(4*D/(L**2))
+        plt.axvline(vline, ls='dashed', zorder=1,linewidth = 1, label = ("4D/L^2"))
+
+        f, pxx = welch(CountMs[i], fs=fps, nperseg = 2**10) #2**12=4096
+
+        x = np.mean(pxx, axis=0)
+        
+        logf = np.log10(f[1:])
+        logx = np.log10(x[1:])
+
+       
+        plt.plot(logf, logx, ls="None", marker = '.', markersize=2, zorder = 2, label="PSD")
+        plt.title(f"Boxsize = {L} µm")
+        plt.xlabel('log frequency (Hz)')
+        vline = np.log10(4*D/(L**2))
+        
+        plt.legend()
+        plt.show()
 
 
+        
